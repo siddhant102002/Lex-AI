@@ -107,6 +107,56 @@ someone should ask before signing this contract.
 Contract:
 {contract_text}""")
 
+@tool
+def analyse_uk_jurisdiction(contract_text: str) -> str:
+    """
+    Analyses a contract specifically for UK law compliance and jurisdiction issues.
+    Use this when the contract mentions UK, England, Wales, Scotland, British law,
+    or when the user asks about UK-specific legal requirements, GDPR, or English law.
+    """
+    return _call_claude(f"""You are a legal assistant specialising in UK law. Please analyse this contract under UK legal standards.
+                        
+    Check for:
 
-# All 5 tools in one list — the agent loads this
-ALL_TOOLS = [compare_contracts, summarize_contract, identify_clauses, flag_risks, suggest_questions]
+1. **GDPR / UK Data Protection Act 2018**
+   - Does the contract handle personal data?
+   - Are there adequate data protection clauses?
+   - Is there a lawful basis for processing data?
+
+2. **Employment Rights Act 1996** (if employment contract)
+   - Is the notice period at least statutory minimum (1 week per year of service)?
+   - Are redundancy rights mentioned?
+   - Is unfair dismissal protection referenced?
+
+3. **Working Time Regulations 1998** (if employment contract)
+   - Is holiday entitlement at least 28 days?
+   - Is the 48-hour working week limit addressed?
+
+4. **Equality Act 2010**
+   - Are there any potentially discriminatory clauses?
+
+5. **Unfair Contract Terms Act 1977**
+   - Are there any exclusion clauses that may be unenforceable?
+
+6. **Governing Law**
+   - Is English/Welsh/Scottish law specified?
+   - Which courts have jurisdiction?
+                        
+7. **Renters Rights Act 2025** (if tenancy/rental agreement)
+   - Are no-fault eviction clauses present? These are now illegal.
+   - Is the tenancy periodic or fixed term? Fixed terms are now abolished.
+   - Is rent increase procedure compliant with the new rules?
+   - Is the property registered on the Private Rented Sector Database?
+
+For each issue found:
+- What the contract says
+- What UK law requires
+- Whether the contract complies
+- What should be added or changed
+
+Contract:
+{contract_text}""")
+
+
+# All 6 tools in one list — the agent loads this
+ALL_TOOLS = [compare_contracts, summarize_contract, identify_clauses, flag_risks, suggest_questions, analyse_uk_jurisdiction]
