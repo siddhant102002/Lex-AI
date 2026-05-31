@@ -6,6 +6,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import init_db, save_contract, get_all_contracts, get_contract_by_id, get_contracts_by_type
+from agents.crew_agent import analyse_with_crew
 import tempfile
 import os
 import sys
@@ -202,6 +203,50 @@ async def compare_contract(request: CompareRequest):
         "tools_used": result["tools_used"]
     }
 
+@app.post("/crew-analyse")
+async def crew_analyse_contract(file: UploadFile = File(...)):
+    """
+    Full multi-agent analysis using CrewAI.
+    4 specialist agents work in sequence:
+    Contract Reader → Risk Analyst → UK Legal Expert → Senior Partner
+    """
+    if not file.filename.lower().endswith(('.pdf', '.docx')):
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX supported")
+
+    suffix = "pdf" if file.filename.lower().endswith('.pdf') else "docx"
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            temp_path = tmp.name
+
+        text = extract_text(temp_path)
+        text = " ".join(text.split())
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read file: {e}")
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    if len(text) < 50:
+        raise HTTPException(status_code=422, detail="Not enough text in document")
+
+    try:
+        # Run CrewAI in a thread pool to avoid blocking the async event loop
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, analyse_with_crew, text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Crew analysis failed: {e}")
+
+    return {
+        "final_report": result["final_report"],
+        "agents_used": result["agents_used"]
+    }
 
 def _detect_type(text: str) -> str:
     """Basic keyword-based contract type detection."""
