@@ -1,11 +1,11 @@
 # main.py
 # FastAPI backend for the Legal AI system
-# Exposes two endpoints: /analyze for full contract analysis and /chat for Q&A
-# The agent in legal_agent.py handles all AI logic — this file just handles requests
+# Exposes endpoints for analysis, chat, contract storage and comparison
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from database import init_db, save_contract, get_all_contracts, get_contract_by_id, get_contracts_by_type
 import tempfile
 import os
 import sys
@@ -21,6 +21,8 @@ app = FastAPI(
     version="2.0"
 )
 
+init_db()  # Initialise database on startup
+
 # Required for React frontend to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
@@ -30,9 +32,16 @@ app.add_middleware(
 )
 
 
+# --- Data shapes ---
+
+class Message(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
     contract_text: str
     question: str
+    chat_history: list[Message] = []
 
 class AnalysisResponse(BaseModel):
     contract_type: str
@@ -43,6 +52,18 @@ class ChatResponse(BaseModel):
     answer: str
     tools_used: list[str]
 
+class ContractRecord(BaseModel):
+    id: int
+    filename: str
+    contract_type: str
+    uploaded_at: str
+
+class CompareRequest(BaseModel):
+    contract_text: str
+    contract_type: str
+
+
+# --- Endpoints ---
 
 @app.get("/health")
 def health_check():
@@ -54,7 +75,7 @@ async def analyze_contract(file: UploadFile = File(...)):
     """
     Accepts a PDF or DOCX contract file.
     Extracts the text, passes it to the legal agent, and returns a full analysis.
-    The agent decides which tools to use based on the request.
+    Also saves the contract to the database for future comparison.
     """
     if not file.filename.lower().endswith(('.pdf', '.docx')):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX supported")
@@ -93,8 +114,18 @@ async def analyze_contract(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
+    contract_type = _detect_type(text)
+
+    # Save to database for future comparison
+    save_contract(
+        filename=file.filename,
+        contract_type=contract_type,
+        text=text,
+        summary=result["answer"]
+    )
+
     return AnalysisResponse(
-        contract_type=_detect_type(text),
+        contract_type=contract_type,
         answer=result["answer"],
         tools_used=result["tools_used"]
     )
@@ -103,14 +134,17 @@ async def analyze_contract(file: UploadFile = File(...)):
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_contract(request: ChatRequest):
     """
-    Accepts a contract text and a question from the user.
-    The agent selects the appropriate tool and returns a targeted answer.
+    Accepts a contract, a question, and the full conversation history.
+    The agent uses the history to answer follow-up questions in context.
     """
     if len(request.contract_text) < 50:
         raise HTTPException(status_code=422, detail="Contract text too short")
 
+    # Convert Pydantic Message objects to plain dicts for the agent
+    history = [{"role": msg.role, "content": msg.content} for msg in request.chat_history]
+
     try:
-        result = run_agent(request.question, request.contract_text)
+        result = run_agent(request.question, request.contract_text, history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
 
@@ -118,6 +152,55 @@ async def chat_with_contract(request: ChatRequest):
         answer=result["answer"],
         tools_used=result["tools_used"]
     )
+
+
+@app.get("/contracts", response_model=list[ContractRecord])
+def list_contracts():
+    """Returns all stored contracts."""
+    return get_all_contracts()
+
+
+@app.get("/contracts/{contract_id}")
+def get_contract(contract_id: int):
+    """Returns a single contract by id."""
+    contract = get_contract_by_id(contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return contract
+
+
+@app.post("/compare")
+async def compare_contract(request: CompareRequest):
+    """
+    Compares a new contract against all stored contracts of the same type.
+    This is the knowledge graph feature — finds patterns across contract history.
+    """
+    previous = get_contracts_by_type(request.contract_type)
+
+    if not previous:
+        return {
+            "answer": "No previous contracts of this type found. Upload more contracts to enable comparison.",
+            "contracts_compared": 0
+        }
+
+    # Build comparison input — new contract + last 3 previous contracts
+    comparison_input = f"NEW CONTRACT:\n{request.contract_text}\n\n"
+    for i, contract in enumerate(previous[:3]):
+        comparison_input += f"PREVIOUS CONTRACT {i+1} ({contract['filename']}):\n{contract['text']}\n\n"
+
+    try:
+        result = run_agent(
+            "Compare the new contract against the previous contracts.",
+            comparison_input
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Comparison failed: {e}")
+
+    return {
+        "answer": result["answer"],
+        "contracts_compared": len(previous[:3]),
+        "tools_used": result["tools_used"]
+    }
 
 
 def _detect_type(text: str) -> str:

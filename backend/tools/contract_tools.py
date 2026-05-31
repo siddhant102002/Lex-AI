@@ -22,6 +22,25 @@ def _call_claude(prompt: str) -> str:
     )
     return messages.content[0].text
 
+@tool
+def compare_contracts(input_text: str) -> str:
+    """
+    Compares a new contract against one or more previous contracts.
+    Use this when the user wants to know how this contract differs from others,
+    or whether this contract is better or worse than previous ones.
+    Input should contain the new contract followed by previous contracts clearly labelled.
+    """
+    return _call_claude(f"""You are a legal expert comparing contracts.
+
+Analyse the contracts provided and give:
+1. Key differences between them
+2. Which differences favour which party
+3. Any clauses that are unusually better or worse than the others
+4. An overall verdict — is the new contract better or worse?
+
+Be specific. Reference actual clause content.
+
+{input_text}""")
 
 @tool
 def summarize_contract(contract_text: str) -> str:
@@ -89,5 +108,5 @@ Contract:
 {contract_text}""")
 
 
-# All 4 tools in one list — the agent loads this
-ALL_TOOLS = [summarize_contract, identify_clauses, flag_risks, suggest_questions]
+# All 5 tools in one list — the agent loads this
+ALL_TOOLS = [compare_contracts, summarize_contract, identify_clauses, flag_risks, suggest_questions]
