@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import init_db, save_contract, get_all_contracts, get_contract_by_id, get_contracts_by_type
 from agents.crew_agent import analyse_with_crew
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import tempfile
 import os
 import sys
@@ -23,6 +25,13 @@ app = FastAPI(
 )
 
 init_db()  # Initialise database on startup
+
+# Serve static frontend files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse("static/index.html")
 
 # Required for React frontend to communicate with this backend
 app.add_middleware(
