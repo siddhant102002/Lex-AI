@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+anthropic
+langchain
+langchain-anthropic
+crewai
+pypdf
+python-docx
+python-dotenv
+pydantic
