@@ -1,7 +1,4 @@
 # contract_tools.py
-# This file contains the 4 skills (tools) the agent can use
-# Each function is wrapped with @tool so the agent can find and use them
-
 import anthropic
 import os
 from dotenv import load_dotenv
@@ -14,7 +11,6 @@ MODEL = "claude-sonnet-4-5"
 
 
 def _call_claude(prompt: str) -> str:
-    """Calls Claude and returns the text response."""
     messages = client.messages.create(
         model=MODEL,
         max_tokens=4000,
@@ -22,57 +18,58 @@ def _call_claude(prompt: str) -> str:
     )
     return messages.content[0].text
 
-@tool
-def compare_contracts(input_text: str) -> str:
-    """
-    Compares a new contract against one or more previous contracts.
-    Use this when the user wants to know how this contract differs from others,
-    or whether this contract is better or worse than previous ones.
-    Input should contain the new contract followed by previous contracts clearly labelled.
-    """
-    return _call_claude(f"""You are a legal expert comparing contracts.
-
-Analyse the contracts provided and give:
-1. Key differences between them
-2. Which differences favour which party
-3. Any clauses that are unusually better or worse than the others
-4. An overall verdict — is the new contract better or worse?
-
-Be specific. Reference actual clause content.
-
-{input_text}""")
 
 @tool
 def summarize_contract(contract_text: str) -> str:
-    """
-    Summarises a legal contract in plain English.
-    Use this when the user wants an overview or summary of the contract.
-    """
-    return _call_claude(f"""You are a legal assistant. Please summarize this contract in plain English.
-                
-Cover:
-1. What the contract is about
-2. Who the parties are
-3. What each party must do
-4. How long it lasts
-5. How it ends
-            
+    """Summarises a legal contract in plain English."""
+    return _call_claude(f"""You are a legal expert. Summarise this contract in plain English.
+
+Use this exact markdown structure:
+# [Contract Type] Summary
+
+## 1. What the contract is about
+[explanation]
+
+## 2. Who the parties are
+- **Party name**: description
+
+## 3. What each party must do
+
+**[Party 1] must:**
+- obligation 1
+- obligation 2
+
+**[Party 2] must:**
+- obligation 1
+
+## 4. How long it lasts
+[explanation]
+
+## 5. How it ends
+[explanation]
+
 Contract:
 {contract_text}""")
 
 
 @tool
 def identify_clauses(contract_text: str) -> str:
-    """
-    Identifies and explains all key clauses in a legal contract.
-    Use this when the user wants to understand specific clauses or provisions.
-    """
-    return _call_claude(f"""You are a legal assistant. Please identify the key clauses in this contract.
+    """Identifies and explains all key clauses in a legal contract."""
+    return _call_claude(f"""You are a legal expert. Identify all key clauses in this contract.
 
-For each clause:
-1. Clause Name
-2. What It Says (plain English)
-3. Why It Matters
+Use this exact markdown structure for each clause:
+
+## [Clause Name]
+
+### What It Says
+[plain English explanation]
+
+### Why It Matters
+[why this clause is important]
+
+---
+
+Repeat for every key clause. Look for: payment terms, termination, liability, confidentiality, intellectual property, dispute resolution, governing law, data protection.
 
 Contract:
 {contract_text}""")
@@ -80,16 +77,36 @@ Contract:
 
 @tool
 def flag_risks(contract_text: str) -> str:
-    """
-    Identifies risky or one-sided clauses in a legal contract.
-    Use this when the user asks about risks, red flags, or what to watch out for before signing.
-    """
-    return _call_claude(f"""You are a legal assistant. Please review this contract and flag any risks.
+    """Identifies risky or one-sided clauses in a legal contract."""
+    return _call_claude(f"""You are a legal expert reviewing this contract for risks.
 
-For each risk:
-1. What it says
-2. Why it is risky
-3. What a fairer version would look like
+Use this exact markdown structure:
+
+# Contract Risk Analysis
+
+## ⚠️ HIGH RISKS
+
+### Risk 1: [Risk Name]
+
+#### The Problem
+[what the clause says]
+
+#### Why It's Risky
+- reason 1
+- reason 2
+
+#### Fairer Version
+[what a balanced clause would say]
+
+---
+
+Repeat for every risk found. Organise by: HIGH RISKS, MEDIUM RISKS, LOWER RISKS.
+
+End with:
+## Summary
+- Overall risk level: HIGH / MEDIUM / LOW
+- Top 3 concerns
+- Recommendation: sign / negotiate / reject
 
 Contract:
 {contract_text}""")
@@ -97,66 +114,78 @@ Contract:
 
 @tool
 def suggest_questions(contract_text: str) -> str:
-    """
-    Generates important questions to ask before signing a contract.
-    Use this when the user wants to know what to ask or how to negotiate.
-    """
-    return _call_claude(f"""You are a legal assistant. Please list 10 questions 
-someone should ask before signing this contract.
+    """Generates important questions to ask before signing a contract."""
+    return _call_claude(f"""You are a legal expert. List 10 critical questions to ask before signing.
+
+Use this structure:
+# 10 Questions to Ask Before Signing
+
+## 1. [Question title]
+[Why this question matters and what to look for in the answer]
+
+Repeat for all 10 questions.
 
 Contract:
 {contract_text}""")
+
+
+@tool
+def compare_contracts(input_text: str) -> str:
+    """Compares a new contract against previous contracts."""
+    return _call_claude(f"""You are a legal expert comparing contracts.
+
+# Contract Comparison
+
+## Key Differences
+[list main differences]
+
+## Which Party Benefits
+[explain who gains from each difference]
+
+## Overall Verdict
+[is the new contract better or worse]
+
+{input_text}""")
+
 
 @tool
 def analyse_uk_jurisdiction(contract_text: str) -> str:
-    """
-    Analyses a contract specifically for UK law compliance and jurisdiction issues.
-    Use this when the contract mentions UK, England, Wales, Scotland, British law,
-    or when the user asks about UK-specific legal requirements, GDPR, or English law.
-    """
-    return _call_claude(f"""You are a legal assistant specialising in UK law. Please analyse this contract under UK legal standards.
-                        
-    Check for:
+    """Analyses a contract for UK law compliance."""
+    return _call_claude(f"""You are a UK solicitor. Analyse this contract for UK law compliance.
 
-1. **GDPR / UK Data Protection Act 2018**
-   - Does the contract handle personal data?
-   - Are there adequate data protection clauses?
-   - Is there a lawful basis for processing data?
+# UK Law Compliance Report
 
-2. **Employment Rights Act 1996** (if employment contract)
-   - Is the notice period at least statutory minimum (1 week per year of service)?
-   - Are redundancy rights mentioned?
-   - Is unfair dismissal protection referenced?
+## UK GDPR / Data Protection Act 2018
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
 
-3. **Working Time Regulations 1998** (if employment contract)
-   - Is holiday entitlement at least 28 days?
-   - Is the 48-hour working week limit addressed?
+## Employment Rights Act 1996
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
 
-4. **Equality Act 2010**
-   - Are there any potentially discriminatory clauses?
+## Working Time Regulations 1998
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
 
-5. **Unfair Contract Terms Act 1977**
-   - Are there any exclusion clauses that may be unenforceable?
+## Equality Act 2010
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
 
-6. **Governing Law**
-   - Is English/Welsh/Scottish law specified?
-   - Which courts have jurisdiction?
-                        
-7. **Renters Rights Act 2025** (if tenancy/rental agreement)
-   - Are no-fault eviction clauses present? These are now illegal.
-   - Is the tenancy periodic or fixed term? Fixed terms are now abolished.
-   - Is rent increase procedure compliant with the new rules?
-   - Is the property registered on the Private Rented Sector Database?
+## Unfair Contract Terms Act 1977
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
 
-For each issue found:
-- What the contract says
-- What UK law requires
-- Whether the contract complies
-- What should be added or changed
+## Renters Rights Act 2025
+### Status: [COMPLIANT / NON-COMPLIANT / NOT APPLICABLE]
+[findings]
+
+## Overall Compliance Summary
+- Compliant areas: [list]
+- Violations found: [list]
+- Recommended actions: [list]
 
 Contract:
 {contract_text}""")
 
 
-# All 6 tools in one list — the agent loads this
 ALL_TOOLS = [compare_contracts, summarize_contract, identify_clauses, flag_risks, suggest_questions, analyse_uk_jurisdiction]

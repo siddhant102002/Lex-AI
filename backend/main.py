@@ -9,6 +9,7 @@ from database import init_db, save_contract, get_all_contracts, get_contract_by_
 from agents.crew_agent import analyse_with_crew
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from agents.legal_agent import run_agent, run_full_analysis
 import tempfile
 import os
 import sys
@@ -120,7 +121,7 @@ async def analyze_contract(file: UploadFile = File(...)):
 4. Questions to ask before signing"""
 
     try:
-        result = run_agent(question, text)
+        result = run_full_analysis(text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
@@ -150,11 +151,11 @@ async def chat_with_contract(request: ChatRequest):
     if len(request.contract_text) < 50:
         raise HTTPException(status_code=422, detail="Contract text too short")
 
-    # Convert Pydantic Message objects to plain dicts for the agent
     history = [{"role": msg.role, "content": msg.content} for msg in request.chat_history]
 
     try:
-        result = run_agent(request.question, request.contract_text, history)
+        concise_question = f"{request.question}\n\nIMPORTANT: Reply in maximum 150 words. Use bullet points. Be direct and concise."
+        result = run_agent(concise_question, request.contract_text, history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
 

@@ -87,3 +87,42 @@ You have memory of the entire conversation — use it to answer follow-up questi
         "answer": answer,
         "tools_used": tools_used
     }
+
+def run_full_analysis(contract_text: str) -> dict:
+    """
+    Runs all 4 tools directly without relying on agent tool selection.
+    Used for the /analyze endpoint to guarantee all tabs have content.
+    """
+    from tools.contract_tools import summarize_contract, identify_clauses, flag_risks, suggest_questions
+    
+    results = {}
+    
+    try:
+        results["summarize_contract"] = summarize_contract.invoke({"contract_text": contract_text})
+    except Exception as e:
+        results["summarize_contract"] = f"Error: {e}"
+    
+    try:
+        results["identify_clauses"] = identify_clauses.invoke({"contract_text": contract_text})
+    except Exception as e:
+        results["identify_clauses"] = f"Error: {e}"
+    
+    try:
+        results["flag_risks"] = flag_risks.invoke({"contract_text": contract_text})
+    except Exception as e:
+        results["flag_risks"] = f"Error: {e}"
+    
+    try:
+        results["suggest_questions"] = suggest_questions.invoke({"contract_text": contract_text})
+    except Exception as e:
+        results["suggest_questions"] = f"Error: {e}"
+
+    # Combine into one answer string matching the format the frontend expects
+    answer = ""
+    for tool_name, result in results.items():
+        answer += f"### {tool_name}\n{result}\n\n"
+
+    return {
+        "answer": answer,
+        "tools_used": list(results.keys())
+    }
